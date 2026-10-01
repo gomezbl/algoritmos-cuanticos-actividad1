@@ -10,7 +10,6 @@ Restricciones:
 """
 
 import dimod
-from dwave.system import LeapHybridSampler
 
 # ============================================================
 # DEFINICIÓN DEL GRAFO
@@ -205,7 +204,23 @@ print("Enviando problema a D-Wave...")
 
 sampler = dimod.SimulatedAnnealingSampler()
 
-sampleset = sampler.sample(bqm)
+# ================================================================================================
+# IMPORTANTE: El proceso de annealing simulado (Simulated Annealing) es un algoritmo estocástico.
+# Una semilla fija permite que esta simulación local sea reproducible,
+# mientras que múltiples ejecuciones (reads) proporcionan al muestreador
+# varias soluciones candidatas.
+# ================================================================================================
+
+SIMULATION_SEED = 12345
+NUM_READS = 100
+
+sample_kwargs = {"num_reads": NUM_READS}
+
+if "seed" in sampler.parameters:
+    print("XXX")
+    sample_kwargs["seed"] = SIMULATION_SEED
+
+sampleset = sampler.sample(bqm, **sample_kwargs)
 
 best = sampleset.first
 
