@@ -9,6 +9,7 @@ Restricciones:
 """
 
 import dimod
+from distance_matrix import construir_matriz_distancias
 from restrictions import restriccion_1, restriccion_2, restriccion_3
 from tsp_validation import is_valid_sample
 
@@ -30,28 +31,10 @@ roads = {
 N = 5
 cities = list(range(N))
 
-# ============================================================
-# CONSTRUCCIÓN DE MATRIZ DE DISTANCIAS
-# ============================================================
-
 BIG_PENALTY = 50
 
-distances = {}
-
-for i in cities:
-    for j in cities:
-
-        if i == j:
-            distances[(i, j)] = 0
-
-        elif (i, j) in roads:
-            distances[(i, j)] = roads[(i, j)]
-
-        elif (j, i) in roads:
-            distances[(i, j)] = roads[(j, i)]
-
-        else:
-            distances[(i, j)] = BIG_PENALTY
+# Construimos la matriz de distancias
+distances = construir_matriz_distancias(roads, cities, BIG_PENALTY)
 
 
 # ============================================================
