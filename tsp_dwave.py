@@ -3,13 +3,14 @@ TSP con restricciones utilizando D-Wave Ocean SDK
 
 Restricciones:
 - Inicio en ciudad 0
-- Segunda ciudad = 2
 - Visitar todas las ciudades
 - Visitar cada ciudad una única vez
 - Regresar al nodo 0
 """
 
 import dimod
+from restrictions import restriccion_1, restriccion_2, restriccion_3
+from tsp_validation import is_valid_sample
 
 # ============================================================
 # DEFINICIÓN DEL GRAFO
@@ -76,8 +77,8 @@ bqm = dimod.BinaryQuadraticModel({}, {}, 0.0, dimod.BINARY)
 # COEFICIENTES DE PENALIZACIÓN
 # ============================================================
 
-A = 20      # Restricciones estructurales
 B = 50      # Carreteras inexistentes
+A = 2 * (N - 1) * (BIG_PENALTY + B) + 1  # Restricciones estructurales
 
 # ============================================================
 # FUNCIÓN OBJETIVO
@@ -101,70 +102,14 @@ for t in range(N):
                     cost
                 )
 
-# ============================================================
-# RESTRICCIÓN 1
-# Cada ciudad debe aparecer una sola vez
-# ============================================================
+# Cada ciudad debe aparecer una sola vez.
+restriccion_1(bqm, cities, N, A, x)
 
-for city in cities:
+# Cada posición debe contener una única ciudad.
+restriccion_2(bqm, cities, N, A, x)
 
-    vars_city = [x(city, t) for t in range(N)]
-
-    # expansión de:
-    # A*(1 - sum(vars))²
-
-    for v in vars_city:
-        bqm.add_variable(v, -A)
-
-    for i in range(len(vars_city)):
-        for j in range(i + 1, len(vars_city)):
-            bqm.add_interaction(
-                vars_city[i],
-                vars_city[j],
-                2 * A
-            )
-
-    bqm.offset += A
-
-# ============================================================
-# RESTRICCIÓN 2
-# Cada posición contiene una única ciudad
-# ============================================================
-
-for t in range(N):
-
-    vars_position = [x(city, t) for city in cities]
-
-    for v in vars_position:
-        bqm.add_variable(v, -A)
-
-    for i in range(len(vars_position)):
-        for j in range(i + 1, len(vars_position)):
-            bqm.add_interaction(
-                vars_position[i],
-                vars_position[j],
-                2 * A
-            )
-
-    bqm.offset += A
-
-# ============================================================
-# RESTRICCIÓN 3
-# Inicio obligatorio en nodo 0
-# x(0,0) = 1
-# ============================================================
-
-bqm.add_variable(x(0, 0), -A)
-bqm.offset += A
-
-# ============================================================
-# RESTRICCIÓN 4
-# Segunda ciudad = nodo 2
-# x(2,1) = 1
-# ============================================================
-
-bqm.add_variable(x(2, 1), -A)
-bqm.offset += A
+# Inicio obligatorio en el nodo 0.
+restriccion_3(bqm, 0, A, x)
 
 # ============================================================
 # PENALIZACIÓN DE CARRETERAS INEXISTENTES
@@ -196,11 +141,12 @@ for t in range(N):
                     B
                 )
 
+
 # ============================================================
 # RESOLUCIÓN EN D-WAVE
 # ============================================================
 
-print("Enviando problema a D-Wave...")
+print("Enviando problema al simulador computador cuántico de annealing...")
 
 sampler = dimod.SimulatedAnnealingSampler()
 
@@ -217,15 +163,26 @@ NUM_READS = 100
 sample_kwargs = {"num_reads": NUM_READS}
 
 if "seed" in sampler.parameters:
-    print("XXX")
     sample_kwargs["seed"] = SIMULATION_SEED
 
 sampleset = sampler.sample(bqm, **sample_kwargs)
 
-best = sampleset.first
+feasible_samples = [
+    sample_record
+    for sample_record in sampleset.data(fields=["sample", "energy"])
+    if is_valid_sample(sample_record.sample, cities, valid_edges)
+]
+
+if not feasible_samples:
+    raise RuntimeError(
+        "El muestreador no produjo ninguna ruta que cumpla las restricciones."
+    )
+
+best = min(feasible_samples, key=lambda sample_record: sample_record.energy)
 
 print("\nEnergia encontrada:")
 print(best.energy)
+
 
 # ============================================================
 # DECODIFICAR SOLUCIÓN
@@ -285,6 +242,26 @@ route = decode_route(best.sample)
 
 print("\nRuta encontrada:")
 print(route)
+
+print("\nDistancias por tramo:")
+uses_missing_road = False
+for start, end in zip(route, route[1:]):
+    if (start, end) in valid_edges:
+        print(f"{start} -> {end}: {distances[(start, end)]}")
+    else:
+        uses_missing_road = True
+        print(
+            f"{start} -> {end}: carretera inexistente "
+            f"(penalización: {distances[(start, end)]})"
+        )
+
+if uses_missing_road:
+    print(
+        "\nCoste total con penalizaciones "
+        f"(no es una ruta válida): {route_cost(route)}"
+    )
+else:
+    print(f"\nDistancia total: {route_cost(route)}")
 
 print("\nVariables activas:")
 

@@ -127,9 +127,6 @@ pip install python-dotenv
 
 ### Configurar credenciales D-Wave
 
-```bash
-dwave setup
-```
 
 ### Ejecutar el programa
 
